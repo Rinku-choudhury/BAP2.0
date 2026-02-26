@@ -1,0 +1,3 @@
+@echo off
+echo Opening SSH tunnel to DEV PostgreSQL...
+start "" /min ssh -N -i "C:\keys\DEV-BAPNEW_key.pem" -L 5433:localhost:5432 azureadmin@74.225.34.123

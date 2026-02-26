@@ -1,0 +1,245 @@
+> model PaymentDefinition {
+    id                   Int             @id @default(autoincrement())
+    title                String
+    calculationType      CalculationType // FIXED | PER_UNIT | PERCENTAGE | FORMULA
+    amount               Decimal? // For FIXED / PERCENTAGE
+    unitName             String? // e.g., 'sq_ft'
+    unitRate             Decimal? // for PER_UNIT
+    isRecurring          Boolean
+    recurrenceFrequency  RecurrenceType? // MONTHLY, YEARLY, etc.
+    recurrenceCount      Int? // Optional
+    taxPercent           Decimal? // e.g., 18
+    isInterestApplicable Boolean
+    interestType         InterestType? // SIMPLE, COMPOUND
+    interestRate         Decimal?
+    enableLateFee        Boolean         @default(false)
+  
+    // Metadata
+    effectiveFrom DateTime   @default(now())
+    effectiveTo   DateTime?
+    status        StatusType @default(ACTIVE)
+    createdAt     DateTime   @default(now())
+    updatedAt     DateTime   @updatedAt
+  
+    form_id Int
+    form    tbl_forms @relation(fields: [form_id], references: [id])
+  
+    lateFeeRules LateFeeRule[]
+    invoices     PaymentInvoice[]
+    demandModifications  DemandModification[] @relation("DefToMods")
+  }
+  
+  // 2. Late Fee Rules
+  model LateFeeRule {
+    id                  Int              @id @default(autoincrement())
+    paymentDefinitionId Int
+    gracePeriodDays     Int
+    penaltyType         PenaltyType // FIXED | PER_DAY | PERCENTAGE
+    penaltyRate         Decimal
+    applyFrequency      PenaltyFrequency // ONCE | DAILY | MONTHLY
+    maxPenalty          Decimal?
+    active              Boolean          @default(true)
+    effectiveFrom       DateTime
+    effectiveTo         DateTime?
+    createdAt           DateTime         @default(now())
+    updatedAt           DateTime         @updatedAt
+  
+    paymentDefinition PaymentDefinition @relation(fields: [paymentDefinitionId], references: [id])
+  }
+  
+  // 3. Generated Invoice (Payable)
+> model PaymentInvoice {
+    id                  Int           @id @default(autoincrement())
+    paymentDefinitionId Int
+    regNumber           String //regNumber
+    baseAmount          Decimal
+    taxAmount           Decimal?
+    discountAmount      Decimal?
+    concessionAmount    Decimal?
+    lateFeeAmount       Decimal?
+    interestAmount      Decimal?
+    totalAmount         Decimal
+    unitQuantity        Decimal? // for PER_UNIT
+    dueDate             DateTime?
+    status              InvoiceStatus @default(UNPAID)
+    generatedOn         DateTime      @default(now())
+    paidOn              DateTime?
+    periodMonth         DateTime
+  
+    paymentDefinition PaymentDefinition @relation(fields: [paymentDefinitionId], references: [id])
+    modifications       DemandModification[] @relation("AppliedInvoiceMods")
+  
+    transactions         PaymentTransaction[]
+    allocations          PaymentAllocation[]
+    applicationMaster    ApplicationMaster      @relation("AppMasterByRegNumber", fields: [regNumber], references: [regNumber])
+    currentForSubmission ApplicationSubmission? @relation("CurrentInv")
+  
+    @@unique([paymentDefinitionId, regNumber, periodMonth])
+  }
+  
+  // 4. Payment Transactions
+> model PaymentTransaction {
+    id           Int               @id @default(autoincrement())
+    invoiceId    Int?
+    regNumber    String?
+    amount       Decimal
+    paymentMode  PaymentMode
+    gateway      String? // Razorpay, etc.
+    gatewayTxnId String? // reference ID from gateway
+    chequeDate   DateTime?
+    chequeNumber String?
+    chequeDrawer String?
+    neftRtgsPaymentDate DateTime?
+    neftRtgsReferenceNumber String?
+    neftRtgsAccountHolderName String?
+    neftRtgsBankName String?
+    remarks      String?
+    userId       Int
+    role_id      Int
+    status       TransactionStatus
+    paidOn       DateTime?
+    responseJson Json?
+    createdAt    DateTime          @default(now())
+  
+    invoice       PaymentInvoice?        @relation(fields: [invoiceId], references: [id])
+    applicationMaster    ApplicationMaster?      @relation("AppMasterByRegNumberToTransactions", fields: [regNumber], references: [regNumber])
+  
+    allocations   PaymentAllocation[]
+    statusHistory PaymentStatusHistory[]
+    refunds       PaymentRefund[]
+  }
+  
+  // 5. Refunds
+  model PaymentRefund {
+    id              Int      @id @default(autoincrement())
+    transactionId   Int
+    refundAmount    Decimal
+    refundReason    String?
+    gatewayRefundId String?
+    refundedOn      DateTime @default(now())
+  
+    transaction PaymentTransaction @relation(fields: [transactionId], references: [id])
+  }
+  
+  // 6. Allocations (Payment → Fee components)
+> model PaymentAllocation {
+    id            Int     @id @default(autoincrement())
+    transactionId Int
+    invoiceId     Int
+    head          String // BASE, TAX, INTEREST, LATEFEE
+    amount        Decimal
+  
+    transaction PaymentTransaction @relation(fields: [transactionId], references: [id])
+    invoice     PaymentInvoice     @relation(fields: [invoiceId], references: [id])
+  }
+  
+  // 7. Status change log (audit)
+  model PaymentStatusHistory {
+    id            Int               @id @default(autoincrement())
+    transactionId Int
+    statusFrom    TransactionStatus
+    statusTo      TransactionStatus
+    changedBy     Int? // Admin ID
+    changedOn     DateTime          @default(now())
+  
+    transaction PaymentTransaction @relation(fields: [transactionId], references: [id])
+  }
+  
+  model ApplicationMaster {
+    id                   Int      @id @default(autoincrement())
+    service_id           Int
+    regNumber            String   @unique
+    user_id              Int?
+    master_data          Json
+    source_submission_id Int
+    version              Int      @default(1)
+    isApproved           Boolean  @default(false)
+    isFreezed            Boolean  @default(false)
+    nocRequested         Boolean  @default(false)
+    created_on           DateTime @default(now())
+    updated_on           DateTime @updatedAt
+  
+    Service tbl_forms @relation("FormToAppMaster", fields: [service_id], references: [id])
+    User    User?     @relation("UserToAppMaster", fields: [user_id], references: [id])
+  
+    SourceSub ApplicationSubmission @relation("SubmissionToAppMaster", fields: [source_submission_id], references: [id])
+  
+    histories       ApplicationMasterHistory[]
+    paymentInvoices PaymentInvoice[]              @relation("AppMasterByRegNumber")
+    paymentTransactions PaymentTransaction[]      @relation("AppMasterByRegNumberToTransactions")
+    processLogs     tbl_application_process_log[] @relation("AppMasterByRegNumberToLogs")
+    SecurityDepositReturn SecurityDepositReturn[] @relation("AppToSecurityDeposit")
+  
+    @@map("tbl_application_master")
+  }
+  
+  model ApplicationMasterHistory {
+    id                   Int      @id @default(autoincrement())
+    service_id           Int
+    regNumber            String
+    snapshot_version     Int
+    master_data          Json
+    source_submission_id Int
+    changed_on           DateTime @default(now())
+  
+    // master back relation (composite)
+    master ApplicationMaster @relation(fields: [regNumber], references: [regNumber])
+  
+    // ⬇ source submission relation WITH NAME
+    SourceSub ApplicationSubmission @relation("SubmissionToAppMasterHistory", fields: [source_submission_id], references: [id])
+  
+    @@index([regNumber, snapshot_version])
+    @@map("tbl_application_master_history")
+  }
+  
+  model AllottedTo {
+    id                     Int     @id @default(autoincrement())
+    department_id          Int
+    user_id                Int
+    form_id                Int
+    collector_instructions String?
+    submission_id          Int
+    department MasterDepartment    @relation(fields: [department_id], references: [id])
+  
+    // Relations
+    submission ApplicationSubmission @relation(fields: [submission_id], references: [id])
+  
+    user       User                  @relation(fields: [user_id], references: [id])
+    form       tbl_forms             @relation(fields: [form_id], references: [id])
+  
+    created_at DateTime @default(now())
+    updated_at DateTime @updatedAt
+  
+    @@unique([submission_id, department_id, user_id])
+    @@index([department_id])
+    @@index([user_id])
+    @@index([submission_id])
+    @@map("tbl_allotted_to")
+  }
+  
+  model UserJurisdiction {
+    id     Int              @id @default(autoincrement())
+    userId Int
+    type   JurisdictionType
+  
+    // point to your masters (rename to your actual model names if different)
+    masterWardId  Int?
+    masterZoneId  Int?
+    department_id Int?
+    cityId        Int?
+    stateId       Int?
+    countryId     Int?
+  
+    // useful metadata
+    isActive   Boolean  @default(true)
+    created_at DateTime @default(now())
+    updated_at DateTime @default(now())
+  
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+    MasterWard MasterWard? @relation(fields: [masterWardId], references: [id])
+    MasterZone MasterZone? @relation(fields: [masterZoneId], references: [id])
+    department MasterDepartment?  @relation(fields: [department_id], references: [id])
+  
+    City       City?       @relation(fields: [cityId], references: [id])
+    State      State?      @relation(fields: [stateId], references: [id])

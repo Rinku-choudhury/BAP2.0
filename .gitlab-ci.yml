@@ -1,0 +1,65 @@
+# stages:
+#   - deploy
+
+# deploy_to_server:
+#   stage: deploy
+#   only:
+#     - main
+#   image: node:18
+#   before_script:
+#     - apt-get update -y
+#     - apt-get install -y openssh-client rsync
+#     - mkdir -p ~/.ssh
+#     - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_ed25519
+#     - chmod 600 ~/.ssh/id_ed25519
+#     - ssh-keyscan -H $SERVER_IP >> ~/.ssh/known_hosts
+
+#   script:
+#     - |
+#       ssh -i ~/.ssh/id_rsa $SERVER_USER@$SERVER_IP << 'EOF'
+#         set -e
+
+#         # Load NVM
+#         export NVM_DIR="$HOME/.nvm"
+#         [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+#         cd /home/azureadmin/backend
+
+#         echo "Pulling latest code"
+#         git pull origin main
+
+#         echo "Backend setup"
+#         npm install
+
+#         echo "Restarting backend PM2"
+#         pm2 restart citizen-backend
+#       EOF
+
+stages:
+  - deploy
+
+deploy_to_server:
+  stage: deploy
+  only:
+    - main
+
+  script:
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_ed25519
+    - chmod 600 ~/.ssh/id_ed25519
+    - ssh-keyscan -H $SERVER_IP >> ~/.ssh/known_hosts
+
+    - |
+      ssh -i ~/.ssh/id_ed25519 $SERVER_USER@$SERVER_IP << 'EOF'
+        set -e
+
+        export NVM_DIR="$HOME/.nvm"
+        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+        cd /home/azureadmin/backend
+
+        git pull origin main
+        npm install
+        pm2 restart citizen-backend
+      EOF
+

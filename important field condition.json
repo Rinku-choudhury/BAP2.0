@@ -1,0 +1,101 @@
+In form field
+
+"conditions": {
+  "api": "/api/get-state",
+  "dependantColumns": [
+    {
+      "setValue": "addressLine2"
+    },
+    {
+      "setValue": "name"
+    },
+    {
+      "selectableValue": "state"
+    },
+    {
+      "selectableValue": "city"
+    }
+  ]
+}
+
+
+
+"conditions": {
+  "api": "/api/get-state",
+  "dependantColumns": [
+    {
+      "selectableValue": "state"
+    }
+  ],
+  "emptyColumn": [
+    "state",
+    "city"
+  ]
+}
+
+
+In backend code
+
+app.get('/api/get-state', (req, res) => {
+
+  const { value
+  } = req.query;
+
+  return res.status(200).json({
+    status: 200,
+    message: 'success',
+    data: {
+      name: "Pankaj",
+      addressLine2: "Line 2",
+      state: [
+        { id: '1', name: 'MP'
+        }
+      ],
+      city: [
+        { id: '1', name: 'Bhopal'
+        }
+      ]
+    }
+  });
+});
+
+
+For Default value
+{
+  "key": "placeOfMarriage",
+  "field_name": "Place Of Marriage/विवाह - स्थल",
+  "type": "text",
+  "disabled": false,
+  "defaultValue": "Indore",
+  "required": true,
+  "placeholder": "Place Of Marriage/विवाह - स्थल",
+  "values": null,
+  "conditions": null
+}
+
+
+For Current Date
+
+{
+  "key": "dateOfApplication",
+  "field_name": "Date of Application/विवाह पंजीकरण की तारीख",
+  "type": "date",
+  "defaultValue": "currentDate",
+  "disabled": false,
+  "required": true,
+  "placeholder": "Date of Application/विवाह पंजीकरण की तारीख",
+  "values": null,
+  "conditions": null
+},
+// test data send for mapping
+
+if (value === 'test-api') {
+      return res.status(200).json({
+        status: 200,
+        message: 'success',
+        data: {
+          name: "Test",
+          state: "Test"
+    }
+  })
+}
